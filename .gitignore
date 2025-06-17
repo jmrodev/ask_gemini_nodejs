@@ -1,0 +1,14 @@
+# .gitignore
+
+# Node.js dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Ask-Gemini-NodeJS specific files to ignore
+.ask_history.json
+.ask_context.local
+.audio_progress.json
+*.mp3
+*.wav
