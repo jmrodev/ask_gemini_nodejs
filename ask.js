@@ -17,7 +17,7 @@ import { GoogleGenAI } from '@google/genai' // Para modelos específicos de audi
 import fetch from 'node-fetch' // Aunque no se usa directamente en este código, se mantiene por si se necesita para otras funciones.
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
+import { fileURLToPath } from 'url' // CORRECCIÓN: Aquí la sintaxis es correcta
 import readline from 'readline'
 import chalk from 'chalk'
 import { marked } from 'marked'
@@ -37,9 +37,13 @@ const DEFAULT_MODEL = 'gemini-1.5-flash-latest'
 const API_KEY = process.env.GEMINI_API_KEY
 
 // Configuración para el modelo de audio y chunking de texto
-//const AUDIO_MODEL = 'gemini-2.5-pro-preview-tts' // Modelo TTS de alta calidad
 const AUDIO_MODEL = 'gemini-2.5-flash-preview-tts'
-const AUDIO_VOICE = 'Zephyr'
+//const AUDIO_MODEL = 'gemini-2.5-pro-preview-tts'
+// La voz 'Zephyr' es la más común y a menudo la única soportada por estos modelos preview
+//const AUDIO_VOICE = 'Zephyr' // Cambia a 'Zephyr' para asegurar 
+const AUDIO_VOICE = 'Charon'
+//const AUDIO_VOICE = 'Enceladus'
+
 const TEXT_CHUNK_SIZE = 30 // Número de líneas por chunk para audio de texto largo
 
 // Inicializar el renderizador de Markdown
@@ -114,6 +118,17 @@ function usage() {
     `  ${chalk.cyan(
       '--system-instruction "<TEXT>"'
     )} Define el comportamiento o rol del modelo.`
+  )
+  // --- MODIFICACIÓN: Añadir opciones de voz a usage() ---
+  console.log(
+    `  ${chalk.cyan(
+      '--speaking-rate <F>'
+    )}  Controla la velocidad de habla para TTS (ej. 0.8 a 1.2).`
+  )
+  console.log(
+    `  ${chalk.cyan(
+      '--pitch <F>'
+    )}            Ajusta el tono de la voz para TTS (ej. -5.0 a 5.0).`
   )
   console.log('\nOpciones Generales:')
   console.log(
@@ -286,17 +301,15 @@ function splitTextIntoChunks(text) {
   return chunks
 }
 
-function saveBinaryFile(fileName, content) {
-  return new Promise((resolve, reject) => {
-    fs.writeFile(fileName, content, (err) => {
-      if (err) {
-        console.error(chalk.red(`Error writing file ${fileName}:`), err)
-        return reject(err)
-      }
-      console.log(chalk.green(`Archivo ${fileName} guardado exitosamente.`))
-      resolve()
-    })
-  })
+// --- MODIFICACIÓN: Usa fs.promises.writeFile para async/await ---
+async function saveBinaryFile(fileName, content) {
+  try {
+    await fs.promises.writeFile(fileName, content)
+    console.log(chalk.green(`Archivo ${fileName} guardado exitosamente.`))
+  } catch (err) {
+    console.error(chalk.red(`Error writing file ${fileName}:`), err)
+    throw err
+  }
 }
 
 // --- Procesamiento de Argumentos ---
@@ -314,6 +327,9 @@ let temperature = undefined
 let verbose = false
 let clearAudioProg = false
 let tts = false // Para la generación de audio de un prompt único
+// --- MODIFICACIÓN: Nuevas variables para speakingRate y pitch ---
+let customSpeakingRate = 0.8;
+let customPitch = -2.0;
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i]
@@ -391,6 +407,26 @@ for (let i = 0; i < args.length; i++) {
         usage()
       }
       break
+    // --- MODIFICACIÓN: Manejar argumentos --speaking-rate y --pitch ---
+    case '--speaking-rate':
+        if (nextArg && !isNaN(parseFloat(nextArg))) {
+            customSpeakingRate = parseFloat(nextArg);
+            i++;
+        } else {
+            console.error(chalk.red('Error: --speaking-rate requiere un número válido (ej. 1.2).'));
+            usage();
+        }
+        break;
+    case '--pitch':
+        if (nextArg && !isNaN(parseFloat(nextArg))) {
+            customPitch = parseFloat(nextArg);
+            i++;
+        } else {
+            console.error(chalk.red('Error: --pitch requiere un número válido (ej. 3.0).'));
+            usage();
+        }
+        break;
+    // --- Fin de modificación ---
     case '--verbose':
       verbose = true
       break
@@ -464,8 +500,8 @@ if (temperature !== undefined) {
   textGenerationConfig.temperature = temperature
 }
 
-// --- Función para TTS (prompt único) ---
-async function generateTTS(promptText, outputFile = 'respuesta.mp3') {
+// --- MODIFICACIÓN: Función para TTS (prompt único) - Ahora acepta speakingRate y pitch ---
+async function generateTTS(promptText, baseFileName = 'respuesta', speakingRate = 1.0, pitch = 0.0) {
   const audioGenerationConfig = {
     responseModalities: ['audio'],
     config: {
@@ -475,6 +511,8 @@ async function generateTTS(promptText, outputFile = 'respuesta.mp3') {
             voiceName: AUDIO_VOICE,
           },
         },
+        speakingRate: speakingRate, // Pasa el valor
+        pitch: pitch,               // Pasa el valor
       },
     },
   }
@@ -485,9 +523,13 @@ async function generateTTS(promptText, outputFile = 'respuesta.mp3') {
       contents: [{ role: 'user', parts: [{ text: promptText }] }],
       config: audioGenerationConfig,
       safetySettings: [
-        // Add safety settings for TTS model as well
         {
           category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        },
+        // --- MODIFICACIÓN: Añadir regla de seguridad para contenido sexual explícito ---
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
           threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
         },
       ],
@@ -495,6 +537,7 @@ async function generateTTS(promptText, outputFile = 'respuesta.mp3') {
 
     let combinedAudioBuffer = Buffer.alloc(0)
     let firstAudioChunkReceived = false
+    let audioMimeType = null // Para almacenar el mimeType del primer chunk de audio
 
     for await (const chunk of responseStream) {
       if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
@@ -502,13 +545,51 @@ async function generateTTS(promptText, outputFile = 'respuesta.mp3') {
         const buffer = Buffer.from(inlineData.data || '', 'base64')
         combinedAudioBuffer = Buffer.concat([combinedAudioBuffer, buffer])
         firstAudioChunkReceived = true
+        if (!audioMimeType) {
+          audioMimeType = inlineData.mimeType // Guarda el mimeType
+        }
       } else if (verbose && chunk.text) {
+        // Esto es si el stream envía también chunks de texto, lo cual es menos común para audio puro
         console.log(chalk.dim(`(Stream text chunk for TTS): ${chunk.text}`))
       }
     }
 
     if (combinedAudioBuffer.length > 0) {
-      await saveBinaryFile(outputFile, combinedAudioBuffer)
+      let finalAudioBuffer = combinedAudioBuffer
+      let fileExtension = 'wav' // Predeterminado a 'wav' ahora que lo estamos manejando
+
+      if (audioMimeType) {
+        fileExtension = mime.getExtension(audioMimeType) || 'wav' // Obtiene extensión o usa 'wav'
+        if (verbose) {
+            console.log(chalk.dim(`MimeType recibido: ${audioMimeType}, extensión sugerida: ${fileExtension}`))
+        }
+
+        // Si el mimeType es raw PCM o un WAV incompleto, convierte a WAV completo
+        if (audioMimeType.startsWith('audio/L') || audioMimeType === 'audio/x-wav' || fileExtension === 'wav') {
+            try {
+                // `convertToWav` espera el rawData como string base64, no el Buffer
+                finalAudioBuffer = convertToWav(Buffer.from(combinedAudioBuffer).toString('base64'), audioMimeType)
+                fileExtension = 'wav' // Asegura que la extensión sea .wav
+            } catch (wavError) {
+                console.warn(chalk.yellow(`Advertencia: Fallo al convertir a WAV, intentando guardar como ${fileExtension}: ${wavError.message}`))
+                // Si falla la conversión a WAV, se queda con el buffer original
+                finalAudioBuffer = combinedAudioBuffer
+            }
+        }
+      } else {
+          console.warn(chalk.yellow('Advertencia: No se recibió información de mimeType. Se intentará guardar como WAV.'))
+          // Si no hay mimeType, intenta como WAV
+          try {
+              finalAudioBuffer = convertToWav(Buffer.from(combinedAudioBuffer).toString('base64'), 'audio/L16;rate=24000') // Asume un formato común
+              fileExtension = 'wav'
+          } catch (wavError) {
+              console.warn(chalk.yellow(`Advertencia: Fallo al asumir WAV: ${wavError.message}. Guardando como un archivo binario genérico.`))
+              fileExtension = 'bin' // Último recurso
+          }
+      }
+
+      const outputFile = `${baseFileName}.${fileExtension}`
+      await saveBinaryFile(outputFile, finalAudioBuffer)
       console.log(chalk.bold.green(`Audio guardado en ${outputFile}`))
     } else if (!firstAudioChunkReceived) {
       const finishReason =
@@ -533,6 +614,8 @@ async function generateTTS(promptText, outputFile = 'respuesta.mp3') {
 
 // --- Lógica Principal Asíncrona ---
 async function run() {
+  const model = genAI.getGenerativeModel({ model: modelName })
+
   if (tts) {
     // --- MODO TTS (prompt único) ---
     try {
@@ -555,9 +638,14 @@ async function run() {
         )
         usage()
       }
-      await generateTTS(promptText, 'respuesta_tts.mp3') // Guarda como un único archivo
+      // --- MODIFICACIÓN: Pasar los nuevos argumentos a generateTTS ---
+      await generateTTS(
+        promptText,
+        'respuesta_tts',
+        customSpeakingRate !== undefined ? customSpeakingRate : 1.0, // Usar 1.0 por defecto
+        customPitch !== undefined ? customPitch : 0.0                // Usar 0.0 por defecto
+      );
     } catch (e) {
-      // Error ya manejado dentro de generateTTS, solo salimos si es un error crítico
       process.exit(1)
     }
     return // Salir después de la ejecución de TTS
@@ -646,6 +734,9 @@ async function run() {
                     voiceName: AUDIO_VOICE,
                   },
                 },
+                // --- MODIFICACIÓN: Pasa speakingRate y pitch a cada chunk ---
+                speakingRate: customSpeakingRate !== undefined ? customSpeakingRate : 1.0,
+                pitch: customPitch !== undefined ? customPitch : 0.0,
               },
             },
           }
@@ -658,7 +749,6 @@ async function run() {
           ]
 
           const responseStream = await ttsAI.models.generateContentStream({
-            // Usar ttsAI y generateContentStream
             model: AUDIO_MODEL,
             contents,
             config: audioGenerationConfig,
@@ -667,11 +757,17 @@ async function run() {
                 category: HarmCategory.HARM_CATEGORY_HARASSMENT,
                 threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
               },
+              // --- MODIFICACIÓN: Añadir regla de seguridad para contenido sexual explícito ---
+              {
+                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+              },
             ],
           })
 
           let combinedAudioBuffer = Buffer.alloc(0)
           let firstAudioChunkReceived = false
+          let audioMimeType = null // Para almacenar el mimeType del primer chunk de audio
 
           for await (const audioChunk of responseStream) {
             // Iterar sobre el stream de audio
@@ -681,22 +777,48 @@ async function run() {
               const buffer = Buffer.from(inlineData.data || '', 'base64')
               combinedAudioBuffer = Buffer.concat([combinedAudioBuffer, buffer])
               firstAudioChunkReceived = true
+              if (!audioMimeType) {
+                audioMimeType = inlineData.mimeType // Guarda el mimeType
+              }
             } else if (verbose && audioChunk.text) {
               console.log(chalk.dim(`(Stream text chunk): ${audioChunk.text}`))
             }
           }
 
           if (combinedAudioBuffer.length > 0) {
-            // Asume MP3. Si el mimeType fuera diferente, usar mime.getExtension
-            const outputFileName = `audio_output_${String(i).padStart(
-              3,
-              '0'
-            )}.mp3`
-            await saveBinaryFile(outputFileName, combinedAudioBuffer)
+            let finalAudioBuffer = combinedAudioBuffer
+            let fileExtension = 'wav'
+
+            if (audioMimeType) {
+                fileExtension = mime.getExtension(audioMimeType) || 'wav'
+                if (verbose) {
+                    console.log(chalk.dim(`MimeType recibido: ${audioMimeType}, extensión sugerida: ${fileExtension}`))
+                }
+                if (audioMimeType.startsWith('audio/L') || audioMimeType === 'audio/x-wav' || fileExtension === 'wav') {
+                    try {
+                        finalAudioBuffer = convertToWav(Buffer.from(combinedAudioBuffer).toString('base64'), audioMimeType)
+                        fileExtension = 'wav'
+                    } catch (wavError) {
+                        console.warn(chalk.yellow(`Advertencia: Fallo al convertir a WAV, intentando guardar como ${fileExtension}: ${wavError.message}`))
+                        finalAudioBuffer = combinedAudioBuffer
+                    }
+                }
+            } else {
+                console.warn(chalk.yellow('Advertencia: No se recibió información de mimeType para el chunk. Se intentará guardar como WAV.'))
+                try {
+                    finalAudioBuffer = convertToWav(Buffer.from(combinedAudioBuffer).toString('base64'), 'audio/L16;rate=24000')
+                    fileExtension = 'wav'
+                } catch (wavError) {
+                    console.warn(chalk.yellow(`Advertencia: Fallo al asumir WAV: ${wavError.message}. Guardando como un archivo binario genérico.`))
+                    fileExtension = 'bin'
+                }
+            }
+
+            const outputFileName = `audio_output_${String(i).padStart(3, '0')}.${fileExtension}`
+            await saveBinaryFile(outputFileName, finalAudioBuffer)
             saveAudioProgress(i)
             chunkProcessedSuccessfully = true
           } else if (!firstAudioChunkReceived) {
-            // No audio data at all after streaming
             const finishReason =
               responseStream.response?.candidates?.[0]?.finishReason
             if (finishReason === 'SAFETY') {
@@ -732,7 +854,7 @@ async function run() {
             error.message.includes('429') ||
             error.message.includes('503') ||
             error.message.includes('unavailable') ||
-            error.message.includes('RESOURCE_EXHAUSTED') // Añadir este código de error común
+            error.message.includes('RESOURCE_EXHAUSTED')
           ) {
             const retryAfter = 5 + Math.pow(2, retries)
             console.log(
@@ -772,7 +894,8 @@ async function run() {
     )
     if (stream) console.log(chalk.yellow('Modo Streaming activado.'))
 
-    const chat = model.startChat({
+    const chatModel = genAI.getGenerativeModel({ model: modelName })
+    const chat = chatModel.startChat({
       history: loadHistoryForChatSdk(),
       generationConfig:
         Object.keys(textGenerationConfig).length > 0
@@ -831,6 +954,7 @@ async function run() {
     console.log(chalk.bold.yellow('\n¡Hasta pronto!'))
   } else {
     // --- MODO PROMPT ÚNICO (Texto/Multimodal) ---
+    const model = genAI.getGenerativeModel({ model: modelName }) // Definir model aquí para este scope
     let contents = []
     let finalPromptText = userPrompt
     const contextString = buildContextString()
@@ -908,3 +1032,100 @@ async function run() {
 }
 
 run()
+
+
+// --- NUEVAS FUNCIONES PARA CONVERTIR A WAV (estas deben estar al final del archivo) ---
+
+/**
+ * @typedef {Object} WavConversionOptions
+ * @property {number} numChannels - Número de canales de audio (ej. 1 para mono, 2 para estéreo).
+ * @property {number} sampleRate - Tasa de muestreo en Hz (ej. 24000).
+ * @property {number} bitsPerSample - Bits por muestra (ej. 16).
+ */
+
+/**
+ * Convierte datos de audio en bruto (base64) a un formato WAV añadiendo la cabecera.
+ * @param {string} rawData - Datos de audio en bruto en formato base64.
+ * @param {string} mimeType - El mimeType de los datos de audio en bruto (ej. "audio/L16;rate=24000").
+ * @returns {Buffer} El buffer de audio con la cabecera WAV.
+ */
+function convertToWav(rawData, mimeType) {
+  const options = parseMimeType(mimeType)
+  // Decodifica los datos base64 primero para obtener la longitud del audio
+  const buffer = Buffer.from(rawData, 'base64')
+  const wavHeader = createWavHeader(buffer.length, options)
+
+  return Buffer.concat([wavHeader, buffer])
+}
+
+/**
+ * Parsea el mimeType para extraer opciones de conversión WAV.
+ * @param {string} mimeType - El mimeType del audio (ej. "audio/L16;rate=24000").
+ * @returns {WavConversionOptions} Las opciones de conversión.
+ */
+function parseMimeType(mimeType) {
+  const [fileType, ...params] = mimeType.split(';').map((s) => s.trim())
+  const [_, format] = fileType.split('/')
+
+  /** @type {Partial<WavConversionOptions>} */
+  const options = {
+    numChannels: 1, // Por defecto, mono
+    sampleRate: 24000, // Por defecto, 24kHz (común para Gemini TTS)
+    bitsPerSample: 16, // Por defecto, 16 bits (común para Gemini TTS)
+  }
+
+  // Intenta parsear bits por muestra del formato de archivo (ej. L16)
+  if (format && format.startsWith('L')) {
+    const bits = parseInt(format.slice(1), 10)
+    if (!isNaN(bits)) {
+      options.bitsPerSample = bits
+    }
+  }
+
+  // Parsea parámetros adicionales como la tasa de muestreo
+  for (const param of params) {
+    const [key, value] = param.split('=').map((s) => s.trim())
+    if (key === 'rate') {
+      options.sampleRate = parseInt(value, 10)
+    }
+  }
+
+  // Asegura que todos los campos requeridos estén definidos, usando valores predeterminados si faltan
+  if (options.numChannels === undefined) options.numChannels = 1;
+  if (options.sampleRate === undefined) options.sampleRate = 24000;
+  if (options.bitsPerSample === undefined) options.bitsPerSample = 16;
+
+  return /** @type {WavConversionOptions} */ (options)
+}
+
+/**
+ * Crea una cabecera WAV (RIFF) para datos de audio PCM.
+ * @param {number} dataLength - La longitud de los datos de audio en bytes.
+ * @param {WavConversionOptions} options - Opciones de formato de audio.
+ * @returns {Buffer} El buffer que contiene la cabecera WAV.
+ */
+function createWavHeader(dataLength, options) {
+  const { numChannels, sampleRate, bitsPerSample } = options
+
+  // http://soundfile.sapp.org/doc/WaveFormat/
+
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8
+  const blockAlign = (numChannels * bitsPerSample) / 8
+  const buffer = Buffer.alloc(44) // Tamaño estándar de cabecera WAV
+
+  buffer.write('RIFF', 0) // ChunkID
+  buffer.writeUInt32LE(36 + dataLength, 4) // ChunkSize
+  buffer.write('WAVE', 8) // Format
+  buffer.write('fmt ', 12) // Subchunk1ID
+  buffer.writeUInt32LE(16, 16) // Subchunk1Size (PCM)
+  buffer.writeUInt16LE(1, 20) // AudioFormat (1 = PCM)
+  buffer.writeUInt16LE(numChannels, 22) // NumChannels
+  buffer.writeUInt32LE(sampleRate, 24) // SampleRate
+  buffer.writeUInt32LE(byteRate, 28) // ByteRate
+  buffer.writeUInt16LE(blockAlign, 32) // BlockAlign
+  buffer.writeUInt16LE(bitsPerSample, 34) // BitsPerSample
+  buffer.write('data', 36) // Subchunk2ID
+  buffer.writeUInt32LE(dataLength, 40) // Subchunk2Size
+
+  return buffer
+}
