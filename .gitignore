@@ -1,14 +1,28 @@
-# .gitignore
-
-# Node.js dependencies
+# Archivos de Node.js
 node_modules/
 
-# Environment variables
+# Variables de entorno
 .env
 
-# Ask-Gemini-NodeJS specific files to ignore
+# Archivos de historial y contexto de ask
 .ask_history.json
 .ask_context.local
-.audio_progress.json
+
+# Archivos de audio generados
 *.mp3
 *.wav
+audio_output_*.mp3
+.audio_progress.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.pnpm-state.json
+
+# IDEs y editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
