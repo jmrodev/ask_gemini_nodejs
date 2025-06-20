@@ -1,29 +1,25 @@
 {
   "name": "ask-gemini-nodejs",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Herramienta de línea de comandos para interactuar con la API de Gemini, con gestión de contexto local por directorio.",
+  "main": "src/ask.js",
   "type": "module",
   "bin": {
-    "ask": "./ask.js"
+    "ask": "src/ask.js"
   },
   "scripts": {
+    "start": "node src/ask.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["gemini", "ai", "cli", "nodejs", "ask", "context"],
+  "author": "Google Gemini (adaptado por el usuario)",
   "license": "ISC",
   "packageManager": "pnpm@10.11.0",
   "dependencies": {
-    "@google/genai": "^1.5.1",
     "@google/generative-ai": "^0.24.1",
     "chalk": "^5.4.1",
     "dotenv": "^16.5.0",
     "marked": "^15.0.12",
-    "marked-terminal": "^7.3.0",
-    "mime": "^4.0.7",
-    "node-fetch": "^3.3.2",
-    "ora": "^8.2.0",
-    "readline": "^1.3.0"
+    "marked-terminal": "^7.3.0"
   }
 }
