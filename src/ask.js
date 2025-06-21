@@ -5,76 +5,41 @@
 // Cargar variables de entorno para ESM
 import 'dotenv/config';
 
-// Importar SDK de Gemini (UNIFICADO)
-import {
-  GoogleGenerativeAI,
-  HarmCategory,
-  HarmBlockThreshold,
-} from '@google/generative-ai';
+// Importar SDK de Gemini
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 
 // Módulos de Node.js
-import { fileURLToPath } from 'url';
-import path from 'path';
-import readline from 'readline';
+import fs from 'fs'; // Necesario para leer archivos adjuntos
+import path from 'path'; // Necesario para basename en file attachments
 
-// CAMBIO CLAVE: Importar marked y TerminalRenderer
+// Importar marked y TerminalRenderer
 import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
 
-// Módulos internos refactorizados
+// Módulos internos
 import { fileToGenerativePart } from './lib/utils.js';
-import { parseArgs, usage } from './args/argParser.js';
+import { parseArgs } from './args/argParser.js'; // 'usage' ya no se exporta directamente desde aquí
 import { getContextHistory, setContextFile, clearContextFile, promptForLocalContext } from './context/contextManager.js';
-import { loadChatHistory, saveChatHistory } from './history/historyManager.js';
+import { loadChatHistory, saveChatHistory, clearChatHistory as clearHistoryFile } from './history/historyManager.js'; // Renombrado para evitar conflicto
 import { getGenerativeModel } from './models/geminiService.js';
+import { questionUser, closeUserInput } from './lib/userInput.js';
+import * as C from './constants.js'; // Importar todas las constantes
 
-// --- Replicar __dirname en ESM ---
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// --- Configuración Global ---
-const HISTORY_FILE = path.join(process.cwd(), '.ask_history.json');
-const LOCAL_CONTEXT_FILE = path.join(process.cwd(), '.ask_context.local');
-const GENERAL_CONTEXT_FILE = path.join(process.env.HOME, '.ask_context.general');
-
-// ELIMINADO: const AUDIO_PROGRESS_FILE = path.join(__dirname, '.audio_progress.json');
-const DEFAULT_MODEL = 'gemini-1.5-flash-latest'; // Modelo de texto/multimodal por defecto
-
-// Definir los nombres de modelos directamente con sus códigos exactos
-const MODEL_NAMES = {
-  LITE: 'models/gemini-2.5-flash-lite-preview-06-17', // Código exacto para Flash-Lite Preview
-  FLASH: 'models/gemini-2.5-flash',                   // Código exacto para Flash 2.5
-  PRO: 'models/gemini-1.5-pro',                      // Modelo Pro (1.5 Pro es la versión estable actual)
-};
-
-const API_KEY = process.env.GEMINI_API_KEY;
-
-// ELIMINADO: Configuración de audio
-const TEXT_CHUNK_SIZE = 30; // Ya no aplica directo pero se mantiene si se usaba para algo mas
-
-// CAMBIO CLAVE: Inicializar el renderizador de Markdown aquí
+// Configurar Markdown Renderer
 marked.setOptions({
   renderer: new TerminalRenderer(),
   gfm: true,
 });
 
-// Inicializar la API de Gemini (UNA SOLA INSTANCIA para todo)
+// Inicializar API de Gemini
+const API_KEY = process.env[C.API_KEY_ENV_VAR];
 if (!API_KEY) {
-  console.error('Error: La variable de entorno GEMINI_API_KEY no está definida.');
+  console.error(C.ERROR_API_KEY_MISSING);
   process.exit(1);
 }
-
-console.log('DEBUG: API_KEY cargada correctamente. Longitud:', API_KEY.length);
+console.log(C.DEBUG_API_KEY_LOADED(API_KEY.length));
 const genAI = new GoogleGenerativeAI(API_KEY);
-console.log('DEBUG: genAI inicializado.');
-
-
-// Helper para readline (inicializado globalmente)
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-});
-const question = (query) => new Promise((resolve) => rl.question(query, resolve));
+console.log(C.DEBUG_GEN_AI_INITIALIZED);
 
 
 // --- Lógica Principal Asíncrona ---

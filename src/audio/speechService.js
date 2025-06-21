@@ -1,9 +1,8 @@
 // src/audio/speechService.js
 
 // Importaciones para @google-cloud/text-to-speech irían aquí cuando se implemente
+import * as Messages from './messages.js';
 
-// ELIMINADO: const AUDIO_MODEL_BASE = 'text-to-speech-001'; // Ejemplo de modelo de TTS
-// ELIMINADO: const AUDIO_VOICE = 'es-ES-Neural2-D'; // Ejemplo de voz
 
 /**
  * Genera audio de texto usando la API de Text-to-Speech (a implementar).
@@ -12,8 +11,8 @@
  * @param {string} outputFile El nombre del archivo de salida.
  */
 export async function generateSpeech(text, outputFile) {
-  console.error(chalk.red('Error: La generación de audio (TTS) aún no está implementada.'));
-  console.warn(chalk.yellow('Para implementar esta funcionalidad, necesitarás el SDK de @google-cloud/text-to-speech y un modelo como text-to-speech-001.'));
+  console.error(Messages.ERROR_TTS_NOT_IMPLEMENTED);
+  console.warn(Messages.WARN_TTS_SDK_NEEDED);
   // Lógica futura de TTS iría aquí usando el SDK de @google-cloud/text-to-speech
   return false;
 }
@@ -24,8 +23,8 @@ export async function generateSpeech(text, outputFile) {
  * @param {string} text El texto a convertir a voz.
  */
 export async function generateLongSpeechInChunks(text) {
-  console.error(chalk.red('Error: La generación de audio largo (por chunks) aún no está implementada.'));
-  console.warn(chalk.yellow('Esta funcionalidad es más compleja y requiere el SDK de @google-cloud/text-to-speech y manejo de streaming específico.'));
+  console.error(Messages.ERROR_LONG_TTS_NOT_IMPLEMENTED);
+  console.warn(Messages.WARN_LONG_TTS_COMPLEXITY);
   return false;
 }
 
@@ -34,5 +33,5 @@ export async function generateLongSpeechInChunks(text) {
  * Por ahora, solo es un stub.
  */
 export function clearAudioProgress() {
-  console.warn(chalk.yellow('Advertencia: La limpieza del progreso de audio está deshabilitada (funcionalidad de audio no implementada).'));
+  console.warn(Messages.WARN_AUDIO_PROGRESS_DISABLED);
 }
