@@ -29,7 +29,7 @@ export function questionUser(query) {
 export function closeUserInput() {
   const rl = getRlInstance();
   if (rl) {
-    rl.close();
+   closeUserInput();
     rlInstance = null; // Reset for potential future uses (though typically script exits)
   }
 }

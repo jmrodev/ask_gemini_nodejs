@@ -72,7 +72,7 @@ async function run() {
     if (setGeneralContextText !== null) {
       setContextFile('general', setGeneralContextText);
     }
-    rl.close();
+   closeUserInput();
     process.exit(0);
   }
 
@@ -89,7 +89,7 @@ async function run() {
     } else {
       console.log('Contexto local no guardado.');
     }
-    rl.close();
+   closeUserInput();
     process.exit(0);
   }
 
@@ -101,13 +101,13 @@ async function run() {
     console.log('DEBUG: Modelo de texto inicializado exitosamente.');
   } catch (e) {
     console.error('ERROR FATAL: Fallo al inicializar el modelo de texto:', e.message);
-    rl.close();
+   closeUserInput();
     process.exit(1);
   }
 
   if (!model) {
       console.error('ERROR FATAL: El modelo de texto no pudo ser inicializado.');
-      rl.close();
+     closeUserInput();
       process.exit(1);
   }
 
@@ -169,7 +169,7 @@ async function run() {
         console.log('');
       }
     }
-    rl.close();
+   closeUserInput();
     console.log('\n¡Hasta pronto!');
   } else {
     // --- MODO PROMPT ÚNICO (Texto/Multimodal) ---
@@ -196,7 +196,7 @@ async function run() {
         finalPromptText = `Basado en el contenido del siguiente archivo, responde a mi pregunta.\n\n--- INICIO DEL ARCHIVO: ${path.basename(filePath)} ---\n\n${fileContent}\n\n--- FIN DEL ARCHIVO ---\n\nMi pregunta es: ${userPrompt}`;
       } catch (e) {
         console.error(`Error al leer el archivo: ${e.message}`);
-        rl.close();
+       closeUserInput();
         process.exit(1);
       }
     }
@@ -209,7 +209,7 @@ async function run() {
         userParts = [{ text: userPrompt }, imagePart];
       } catch (e) {
         console.error(`Error al procesar la imagen: ${e.message}`);
-        rl.close();
+       closeUserInput();
         process.exit(1);
       }
     }
@@ -235,7 +235,7 @@ async function run() {
     } catch (error) {
       console.error('\nError:', error.message);
     } finally {
-        rl.close();
+       closeUserInput();
     }
   }
 }
