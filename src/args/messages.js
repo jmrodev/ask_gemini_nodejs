@@ -23,6 +23,7 @@ export const USAGE_MESSAGES = {
   enableContextOption: `  ${chalk.cyan('--enable-context')}    Activa la lectura de contexto local/general (default para todos los modos).`,
   disableContextOption: `  ${chalk.cyan('--disable-context')}   Desactiva la lectura de contexto local/general.`,
   forceNewContextOption: `  ${chalk.cyan('--force-new-context')} Fuerza la creación de un nuevo contexto local, sobrescribiendo el existente si lo hay.`,
+  ttsOption: `  ${chalk.cyan('--tts "<texto>')}        Convierte el texto proporcionado a audio WAV.`,
   generalOptionsHeader: '\nOpciones Generales:',
   verboseOption: `  ${chalk.cyan('--verbose')}           Activa la salida de depuración detallada`,
   helpOption: `  ${chalk.cyan('--help')}            Muestra esta ayuda`,
@@ -36,9 +37,11 @@ export const USAGE_MESSAGES = {
   note2: `    El modo ${chalk.cyan('--chat')} SÍ carga y guarda el historial en ${HISTORY_FILE_DISPLAY} por defecto.`,
   note3: '    Los contextos locales/generales se pueden usar en ambos modos si están activados.',
   note4: '    Si no hay contexto local y no se usan flags de contexto, se te preguntará para definirlo.',
+  note5: '    La opción --tts convierte el texto proporcionado a formato WAV y lo guarda en el directorio actual.',
 };
 
 export const ERROR_MESSAGES = {
+  ttsRequiresText: chalk.red('Error: --tts requiere un texto para convertir a audio.'),
   imageRequiresPath: chalk.red('Error: --image requiere una ruta de archivo.'),
   fileRequiresPath: chalk.red('Error: --file requiere una ruta de archivo.'),
   systemInstructionRequiresArg: chalk.red('Error: --system-instruction requiere un argumento.'),
@@ -73,6 +76,7 @@ export function displayUsage() {
   console.log(USAGE_MESSAGES.inputOptionsHeader);
   console.log(USAGE_MESSAGES.imageOption);
   console.log(USAGE_MESSAGES.fileOption);
+  console.log(USAGE_MESSAGES.ttsOption);
   console.log(USAGE_MESSAGES.generationOptionsHeader);
   console.log(USAGE_MESSAGES.maxTokensOption);
   console.log(USAGE_MESSAGES.temperatureOption);
@@ -96,5 +100,6 @@ export function displayUsage() {
   console.log(USAGE_MESSAGES.note2);
   console.log(USAGE_MESSAGES.note3);
   console.log(USAGE_MESSAGES.note4);
+  console.log(USAGE_MESSAGES.note5);
   process.exit(1);
 }

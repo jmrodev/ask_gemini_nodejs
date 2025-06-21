@@ -30,6 +30,7 @@ export function parseArgs() {
   let enableChatMemory = undefined;
   let enableContext = undefined;
   let forceNewContext = false;
+  let textToSpeech = null; // Text for text-to-speech conversion
 
   let clearHistoryFlag = false;
   let setLocalContextText = null;
@@ -99,6 +100,14 @@ export function parseArgs() {
           i++;
         } else {
           exitWithUsage(ERROR_MESSAGES.temperatureRequiresFloat);
+        }
+        break;
+      case '--tts':
+        if (nextArg) {
+          textToSpeech = nextArg;
+          i++;
+        } else {
+          exitWithUsage(ERROR_MESSAGES.ttsRequiresText);
         }
         break;
       case '--enable-chat-memory':
